@@ -1,0 +1,373 @@
+---
+title: "Data project 2: Game developer A/B testing"
+author: Cynthia Li
+output: 
+  pdf_document:
+          number_sections: false
+---
+
+```{r, echo = FALSE, message=FALSE, warning=FALSE}
+library(tidyverse)
+library(knitr)
+game_data <- read_csv("/Users/cynthia.lixinyi/Desktop/stat135/data proj 2/game_data.csv")
+```
+
+
+## Problem 1: Exploring the data
+
+### Part a
+Using the quantile and ecdf function, we can find that more than 95% of games_played data points have values under 250. 
+```{r}
+quantile(game_data$games_played)
+ecdf(game_data$games_played)(250)
+```
+If we include those data point with extremely large number of games_played, details will be hidden in the distribution plot. Therefore, I divide the x-axis (which represents games_played) into two intervals [0, 250], (250, 1000], and the rest above 1000. The third interval only consists about 0.13% of all the data points, so it is trivial and hard to draw the density plot for this interval at this stage.
+```{r}
+interval_3 <- filter(game_data, games_played >=1000)
+nrow(interval_3) / nrow(game_data)
+```
+Below are the density plots for the previous two intervals in two separate plots. Note that the scales on y-axis are different.
+```{r}
+interval_1 <- filter(game_data, games_played <= 250)
+ggplot(interval_1, aes(x=games_played)) +
+  geom_density()
+```
+
+
+```{r}
+interval_2 <- filter(game_data, games_played > 250 & games_played < 1000)
+nrow(interval_2) / nrow(game_data)
+ggplot(interval_2, aes(x=games_played)) +
+  geom_density()
+```
+
+### Part b
+Again, let's compare the the density plot of the number of games_played in three intervals separately. The two density plots may be too similar to see in the same plot, so, additionally,  two separate density plots faceted by the version of the game are presented. 
+```{r}
+interval_1_overlay <- interval_1 %>%
+  ggplot(aes(x=games_played)) +
+  geom_density(aes(color=group, fill = group), alpha = 0.2) 
+interval_1_overlay +
+  ggtitle("Overlaid density plots of the number of games played in interval 1 in version A and B")
+interval_1_overlay +
+  facet_wrap(~group) +
+  ggtitle("The density plots of the number of games played in interval 1 faceted by the version of the game")
+```
+
+
+```{r}
+interval_2_overlay <- interval_2 %>%
+  ggplot(aes(x=games_played)) +
+  geom_density(aes(color=group, fill = group), alpha = 0.2) 
+interval_2_overlay +
+  ggtitle("Overlaid density plots of the number of games played in interval 2 in version A and B")
+interval_2_overlay +
+  facet_wrap(~group) +
+  ggtitle("The density plots of the number of games played in interval 2 faceted by the version of the game")
+```
+```{r}
+interval_3_overlay <- interval_3 %>%
+  ggplot(aes(x=games_played)) +
+  geom_density(aes(color=group, fill = group), alpha = 0.2) 
+interval_3_overlay +
+  ggtitle("Overlaid density plots of the number of games played in interval 3 in version A and B")
+interval_3_overlay +
+  facet_wrap(~group) +
+  ggtitle("The density plots of the number of games played in interval 3 faceted by the version of the game")
+```
+```{r}
+ggplot(interval_1, aes(x=games_played, fill=group)) +
+  geom_histogram(alpha=.5) +
+  ggtitle("Games played in interval_1 [0, 250] in version A and B")
+  
+
+ggplot(interval_2, aes(x=games_played, fill=group)) +
+  geom_histogram(alpha=.5) +
+  ggtitle("Games played in interval_2 (250, 1000] in version A and B")
+
+ggplot(interval_3, aes(x=games_played, fill=group)) +
+  geom_histogram(alpha=.5) +
+  ggtitle("Games played in interval_3 (> 1000) in version A and B")
+```
+The number of games played in version A represented by the color red is greater than that in version B represented by the color blue. Therefore, I recommend version A of the game over version B.
+
+### Part c
+```{r}
+num_of_A <- game_data %>%
+  filter(group == 'A') %>%
+  nrow()
+num_of_retained_1_A <- game_data %>%
+  filter(group == 'A' & retained_1 == 'TRUE') %>%
+  nrow()
+num_of_retained_1_A / num_of_A
+```
+```{r}
+num_of_A <- game_data %>%
+  filter(group == 'A') %>%
+  nrow()
+num_of_retained_1_A <- game_data %>%
+  filter(group == 'A' & retained_7 == 'TRUE') %>%
+  nrow()
+num_of_retained_1_A / num_of_A
+```
+```{r}
+num_of_B <- game_data %>%
+  filter(group == 'B') %>%
+  nrow()
+num_of_retained_1_B <- game_data %>%
+  filter(group == 'B' & retained_1 == 'TRUE') %>%
+  nrow()
+num_of_retained_1_B / num_of_B
+```
+```{r}
+num_of_B <- game_data %>%
+  filter(group == 'B') %>%
+  nrow()
+num_of_retained_1_B <- game_data %>%
+  filter(group == 'B' & retained_7 == 'TRUE') %>%
+  nrow()
+num_of_retained_1_B / num_of_B
+```
+
+
+For version A, the proportion of players that continued to play 1 day after installation is 0.448; the proportion to play 7 days after installation is 0.190.
+
+For version B, the proportion of players that contined to play 1 day after installation is 0.442; the proportion to play 7 days after installation is 0.182.
+
+
+## Problem 2: Bootstrapped estimates
+### Part a compute a classical (theoretical) 95% confidence interval for the average number of games played in the first 14 days (ignoring group). 
+```{r}
+game_data <- filter(game_data, games_played<=3000)
+sample_data <- game_data$games_played
+
+mu_est <- mean(sample_data)
+sd_est <- sd(sample_data)
+
+alpha <- 0.05
+n <- nrow(game_data)
+t <- qt(1 - alpha/2,  n-1)
+theoretical_ci <- c(mu_est - t*sd_est/sqrt(n),
+                    mu_est + t*sd_est/sqrt(n))
+theoretical_ci
+# use the in-built function to confirm
+t.test(game_data$games_played)$conf.int
+```
+
+
+### Part b generate 1,000 non-parametric bootstrapped estimates of the average number of games played in the first 14 days (ignoring group). Present a histogram of your bootstrap estimates and compute a 95% bootstrapped confidence interval for the average number of games played in the first days. How does your bootstrap confidence interval compare with the classical confidence interval from the previous question? 
+```{r}
+# First, remove the outlier
+sample_data <- game_data$games_played
+# draw some non-parametric bootstrap samples
+np_boot_mean_df <- map_df(1:1000, function(i) {
+  # sample from the data with replacement
+  bootstrap_data <- sample(sample_data, length(sample_data), replace = TRUE)
+  # compute the sample mean of the bootstrap sample
+  data.frame(boot_mean = mean(bootstrap_data))
+})
+
+# Plot a histogram of the bootstrapped sample means
+np_boot_mean_df %>%
+  ggplot() +
+  geom_histogram(aes(x = boot_mean), color = "white",
+                 binwidth = 0.2) +
+  # add a line for the sample estimate of the mean
+  geom_vline(xintercept = mean(sample_data), 
+             color = "orange", size = 1) +
+  # add a line for the bootstrapped estimate of the mean
+  geom_vline(xintercept = mean(np_boot_mean_df$boot_mean), 
+             color = "cornflowerblue", size = 1) +
+  labs(x = "bootstrapped sample mean") +
+  theme_classic()
+```
+```{r}
+# Reference @https://bcourses.berkeley.edu/courses/1511775/files/folder/slides/06_confidence_intervals_extras?preview=82548171
+# draw 1000 non-parametric bootstrap samples from our sample
+samples_boot <- map(1:1000, ~sample(sample_data, replace = TRUE))
+
+# calculate the (bootstrap) mean for each bootstrap sample
+boot_means <- map_dbl(samples_boot, ~mean(.))
+
+# compute a 95% CI from these bootstrapped means
+boot_ci <- c(quantile(boot_means, alpha/2), 
+        quantile(boot_means, (1 - alpha/2)))
+boot_ci
+```
+Compared to the classical 95% confidence interval (50.59947, 53.14545), the bootstrap 95% confidence interval (50.87847, 53.24325) shifts rightward a little bit.
+
+### Part c Generate 1,000 non-parametric bootstrapped estimates of the proportion, ˆpday1, of retention at day 1 separately for groups A and B. Present a visualization that compares the distribution of this estimate for each group. Based on your plot, which version of the game would you recommend?
+```{r}
+sample_data_A <- filter(game_data, group == 'A')
+# draw some non-parametric bootstrap samples
+np_boot_prop_day1_df_A <- map_df(1:1000, function(i) {
+  # sample from the data with replacement
+  bootstrap_data_A <- sample_n(sample_data_A, length(sample_data_A), replace = TRUE)
+  # compute the sample proportion day 1 of the bootstrap sample
+  prop_day1_A <- mean(bootstrap_data_A$retained_1)
+  data.frame(boot_prop_day1_A = prop_day1_A)
+})
+
+# Plot a histogram of the bootstrapped sample proportion day 1
+g_A1 <-
+np_boot_prop_day1_df_A %>%
+  ggplot() +
+  geom_histogram(aes(x = boot_prop_day1_A), fill = 'red',
+                 binwidth = 0.1, alpha = 0.2) +
+  geom_vline(xintercept = mean(np_boot_prop_day1_df_A$boot_prop_day1_A), 
+             color = "red", size = 1) +
+  labs(x = "Bootstrapped sample proportion day 1. A:red B:blue ") +
+  theme_classic()
+```
+
+
+```{r}
+sample_data_B <- filter(game_data, group == 'B')
+# draw some non-parametric bootstrap samples
+np_boot_prop_day1_df_B <- map_df(1:1000, function(i) {
+  # sample from the data with replacement
+  bootstrap_data_B <- sample_n(sample_data_B, length(sample_data_B), replace = TRUE)
+  # compute the sample proportion day 1 of the bootstrap sample
+  prop_day1_B <- mean(bootstrap_data_B$retained_1)
+  data.frame(boot_prop_day1_B = prop_day1_B)
+})
+
+# Plot a histogram of the bootstrapped sample proportion day 1
+g_A1 +
+  geom_histogram(data = np_boot_prop_day1_df_B, aes(x = boot_prop_day1_B), fill = 'blue',
+                 binwidth = 0.1, alpha = 0.2) +
+  geom_vline(xintercept = mean(np_boot_prop_day1_df_B$boot_prop_day1_B), 
+             color = "blue", size = 1) +
+  theme_classic()
+```
+The distributions of proportions of players who retained after day 1 are similar, but group A has a higher mean even though the difference is not obvious. I recommend the version A game. 
+
+### Part d Generate 1,000 non-parametric bootstrapped estimates of the proportion, ˆpday7, of retention at day 7 separately for groups A and B. Present a visualization that compares the distribution of this estimate for each group. Based on your plot, which version of the game would you recommend? Does your recommendation agree with your conclusion in part c of this question? If so, do you feel that these findings are more or less compelling than the 1-day findings (justify your answer).
+```{r}
+sample_data_A <- filter(game_data, group == 'A')
+# draw some non-parametric bootstrap samples
+np_boot_prop_day7_df_A <- map_df(1:1000, function(i) {
+  # sample from the data with replacement
+  bootstrap_data_A <- sample_n(sample_data_A, length(sample_data_A), replace = TRUE)
+  # compute the sample proportion day 7 of the bootstrap sample
+  prop_day7_A <- mean(bootstrap_data_A$retained_7)
+  data.frame(boot_prop_day7_A = prop_day7_A)
+})
+
+# Plot a histogram of the bootstrapped sample proportion day 1
+g_A7 <-
+np_boot_prop_day7_df_A %>%
+  ggplot() +
+  geom_histogram(aes(x = boot_prop_day7_A), fill = 'red',
+                 binwidth = 0.1, alpha = 0.2) +
+  geom_vline(xintercept = mean(np_boot_prop_day7_df_A$boot_prop_day7_A), 
+             color = "red", size = 1) +
+  labs(x = "Bootstrapped sample proportion day 7 A:red B:blue ") +
+  theme_classic()
+
+sample_data_B <- filter(game_data, group == 'B')
+# draw some non-parametric bootstrap samples
+np_boot_prop_day7_df_B <- map_df(1:1000, function(i) {
+  # sample from the data with replacement
+  bootstrap_data_B <- sample_n(sample_data_B, length(sample_data_B), replace = TRUE)
+  # compute the sample proportion day 7 of the bootstrap sample
+  prop_day7_B <- mean(bootstrap_data_B$retained_7)
+  data.frame(boot_prop_day7_B = prop_day7_B)
+})
+
+# Plot a histogram of the bootstrapped sample proportion day 7
+g_A7 +
+  geom_histogram(data = np_boot_prop_day7_df_B, aes(x = boot_prop_day7_B), fill = 'blue',
+                 binwidth = 0.1, alpha = 0.2) +
+  geom_vline(xintercept = mean(np_boot_prop_day7_df_B$boot_prop_day7_B), 
+             color = "blue", size = 1) +
+  theme_classic()
+```
+The distributions of proportions of players who retained after day 7 are similar, but group A has a higher mean even though the difference is not obvious. I recommend the version A game. This agrees with the conclusion in 2.c. Because retention rate after 7 days can reflect the true quality of the game, retention rate after 7 days provides a more compelling reason to stick with version A than retention rate after 1 day does.  
+
+
+## Problem 3: Hypothesis tests
+
+### Part a
+Let mu denotes the number of games that the average player plays in the 14 days after they install the app.
+Null hypothesis H0: mu = 52
+Alternative hypothesis H1: mu < 52
+```{r}
+n = nrow(game_data)
+df = n - 1
+mu = mean(game_data$games_played)
+sd = sd(game_data$games_played)
+t = (mu - 52) / (sd / sqrt(n))
+t
+p_value = pt(t, df)
+p_value
+
+t.test(game_data$games_played, mu = 52, altenative = "less")
+```
+
+### Part b
+The p-value is about 0.036, so we cannot reject the null hypothesis. 
+
+### Part c
+Null hypothesis: mu_a - mu_b = 0
+Alternative hypothesis: mu_a - mu_b is not 0
+```{r}
+A = filter(game_data, group == 'A')
+B = filter(game_data, group == 'B')
+n = nrow(A)
+m = nrow(B)
+mu_a = mean(A$games_played)
+mu_b = mean(B$games_played)
+sd_a = sd(A$games_played)
+sd_b = sd(B$games_played)
+se = sqrt(sd_a^2/n + sd_b^2/m)
+df = (sd_a^2/n + sd_b^2/m)^2 / ((sd_a^4/(n^2*(n-1))) + (sd_b^4/(m^2*(m-1))))
+t = (mu_a-mu_b-0)/se
+p_value = 2 * pt(t, df)
+t
+p_value
+                                
+t.test(A$games_played, B$games_played)                            
+```
+p-value is greater than 0.05 threshold. We cannot reject the null hypothesis. mu_a is equal to mu_b i.e. there is no difference in the number of games played in the first 14 days between group A and B. This agrees with problem 1.2.
+
+### Part d
+Null hypothesis: p_1a - p_1b = 0
+Alternative hypothesis: p_1a - p_1b is not equal to 0
+```{r}
+df = (n-1) + (m-1)
+p_1a = mean(A$retained_1)
+p_1b = mean(B$retained_1)
+sd_1a = sd(A$retained_1)
+sd_1b = sd(B$retained_1)
+sd_1p = sqrt(((sd_1a)^2*(n-1) + (sd_1b)^2*(m-1)) / df)
+t = (p_1a-p_1b) / (sd_1p * sqrt(1/n + 1/m)) 
+t
+(1 - pt(t, df)) * 2
+
+t.test(A$retained_1, B$retained_1)
+
+```
+The p-value is greater than 0.05. Fail to reject the null hypothesis. Between group A and B, we conclude that there is no difference in the proportion of player who retain after day 1.
+
+### Part e
+Null hypothesis: p_7a - p_7b = 0
+Alternative hypothesis: p_7a - p_7b is not equal to 0
+```{r}
+df = (n-1) + (m-1)
+p_7a = mean(A$retained_7)
+p_7b = mean(B$retained_7)
+sd_7a = sd(A$retained_7)
+sd_7b = sd(B$retained_7)
+sd_7p = sqrt(((sd_1a)^2*(n-1) + (sd_1b)^2*(m-1)) / df)
+t = (p_7a-p_7b) / (sd_7p * sqrt(1/n + 1/m)) 
+t
+(1 - pt(t, df)) * 2
+
+t.test(A$retained_7, B$retained_7)
+
+```
+The p-value is about 0.001, which is less than 0.05 threshold. We reject the null hypothesis. Since t is greater than 0, we can conclude that the proportion of player who retain after day 7 in group A is higher than that in group B.
+
+### Part f
+The version A would be better than the version B. Even though the proportions of players who retain after day 1 in group A and B are nearly the same, the proportion of player who retain after day 7 in group A is higher than that in group B.
